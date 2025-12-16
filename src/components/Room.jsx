@@ -1,4 +1,4 @@
-const Login = () => {
+const Room = () => {
   return (
     <>
       <div className="relative h-screen">
@@ -26,8 +26,9 @@ const Login = () => {
                 required
                 className="block w-full px-4 py-3 text-lg bg-white border border-gray-500 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Room Code"
+                maxLength={8}
               />
-                <div className="flex ">
+                <div className="flex">
                 <button className="flex-1 py-3 text-lg  bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-200 shadow-md">
                   Join Room
                 </button>
@@ -44,4 +45,4 @@ const Login = () => {
   )
 }
 
-export default Login
+export default Room

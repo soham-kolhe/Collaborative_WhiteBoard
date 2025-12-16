@@ -1,11 +1,14 @@
-// import Login from "./components/Login";
-import Whiteboard from "./components/Whiteboard";
+// import Room from "./components/Room";
+// import Whiteboard from "./components/Whiteboard";
+
+import Canvas from "./components/Canvas";
 
 function App() {
   return (
     <>
-    {/* <Login /> */}
-    <Whiteboard />
+    {/* <Room /> */}
+    {/* <Whiteboard /> */}
+    <Canvas />
     </>
   );
 }

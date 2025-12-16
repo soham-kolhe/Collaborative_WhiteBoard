@@ -11,6 +11,10 @@ const Whiteboard = () => {
       </div>
     
       <ToolBar />
+
+      <div className="relative w-full h-full overflow-hidden">
+        {/* Drawing Canvas */}
+      </div>
     </div>
   )
 }
