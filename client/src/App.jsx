@@ -74,6 +74,8 @@ function App() {
     link.click();
   };
 
+  
+
   return (
     <div className="relative w-screen h-screen bg-white overflow-hidden">
       <Toolbar

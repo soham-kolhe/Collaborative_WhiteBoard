@@ -21,11 +21,21 @@ const Board = ({
   });
   const [usersInRoom, setUsersInRoom] = useState([]);
   const [canDraw, setCanDraw] = useState(true);
+  const [remoteCursors, setRemoteCursors] = useState({});
 
   const textAreaRef = useRef(null);
-
   const stopDrawing = () => {
     setIsDrawing(false);
+  };
+
+  const getColorFromSocketId = (socketId) => {
+    let hash = 0;
+    for (let i = 0; i < socketId.length; i++) {
+      hash = socketId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue}, 75%, 55%)`;
   };
 
   const saveSnapshot = () => {
@@ -116,8 +126,18 @@ const Board = ({
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
-    socket.on("user_list", (list) => {
-      setUsersInRoom(list);
+    socket.on("user_list", (users) => {
+      setUsersInRoom(users);
+
+      setRemoteCursors((prev) => {
+        const updated = {};
+        users.forEach((u) => {
+          if (prev[u.socketId]) {
+            updated[u.socketId] = prev[u.socketId];
+          }
+        });
+        return updated;
+      });
     });
 
     socket.on("draw", (data) => {
@@ -158,12 +178,41 @@ const Board = ({
       img.src = snapshot;
     });
 
+    socket.on("cursor-update", (data) => {
+      setRemoteCursors((prev) => ({
+        ...prev,
+        [data.socketId]: {
+          x: data.x,
+          y: data.y,
+          userName: data.userName,
+          lastActive: Date.now(),
+        },
+      }));
+    });
+
+    // Remove cursor when a user leaves
+    socket.on("user_list", (users) => {
+      setUsersInRoom(users);
+
+      setRemoteCursors((prev) => {
+        const activeIds = users.map((u) => u.socketId);
+        return Object.fromEntries(
+          Object.entries(prev).filter(([id]) => activeIds.includes(id))
+        );
+      });
+    });
+
     socket.on("clear_canvas", () => {
       const canvas = canvasRef.current;
+      if (!canvas) return;
+
       const ctx = canvas.getContext("2d");
+      ctx.globalCompositeOperation = "source-over";
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      saveSnapshot();
+      // repaint white background (important)
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     });
 
     return () => {
@@ -172,9 +221,31 @@ const Board = ({
       socket.off("draw_shape");
       socket.off("draw_text");
       socket.off("load-canvas");
+      socket.off("cursor-update");
       socket.off("clear_canvas");
     };
   }, [socket, canvasRef]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+
+      setRemoteCursors((prev) => {
+        const updated = {};
+
+        Object.entries(prev).forEach(([id, cursor]) => {
+          if (now - cursor.lastActive < 3000) {
+            // ⏳ 3 seconds idle timeout
+            updated[id] = cursor;
+          }
+        });
+
+        return updated;
+      });
+    }, 1000); // check every second
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (textState.isTyping && textAreaRef.current) {
@@ -183,14 +254,16 @@ const Board = ({
   }, [textState.isTyping]);
 
   const handleMouseMove = (e) => {
-    if (!canDraw || !isDrawing || tool === "text") return;
-
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     const rect = canvas.getBoundingClientRect();
 
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    socket.emit("cursor-move", { x, y, roomId });
+
+    if (!canDraw || !isDrawing || tool === "text") return;
 
     if (tool === "rect" || tool === "ellipse" || tool === "arrow") {
       ctx.putImageData(snapshot, 0, 0);
@@ -338,9 +411,15 @@ const Board = ({
               key={index}
               className={`flex items-center justify-between p-2.5 rounded-2xl transition-all border ${
                 user?.name === userName
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-200 border-transparent"
-                  : "bg-white border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 text-gray-800"
+                  ? "text-white shadow-md border-transparent"
+                  : "border-gray-100 hover:border-blue-200 text-gray-800"
               }`}
+              style={{
+                backgroundColor:
+                  user?.name === userName
+                    ? getColorFromSocketId(user.socketId) // full color for "Me"
+                    : `${getColorFromSocketId(user.socketId)}20`, // light tint for others
+              }}
             >
               <div className="flex items-center gap-3 overflow-hidden">
                 {/* Avatar Icon */}
@@ -358,10 +437,18 @@ const Board = ({
 
                 {/* User Details */}
                 <div className="overflow-hidden">
-                  <p className="text-xs font-semibold truncate leading-tight">
-                    {typeof user?.name === "string" ? user.name : "User"}
-                    {user?.name === userName && "(Me)"}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    {/* Username */}
+                    <p
+                      className="text-xs font-semibold truncate leading-tight"
+                      style={{
+                        color: user?.name === userName ? "#fff" : "#111",
+                      }}
+                    >
+                      {typeof user?.name === "string" ? user.name : "User"}
+                      {user?.name === userName && "(Me)"}
+                    </p>
+                  </div>
                   <span
                     className={`text-[8px] font-black uppercase tracking-tighter ${
                       user?.name === userName
@@ -497,16 +584,40 @@ const Board = ({
         </div>
       </div>
 
-      {/* Canvas Element */}
-      <canvas
-        ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={stopDrawing}
-        className="block w-full h-full touch-none absolute inset-0 z-0"
-        style={{ cursor: tool === "text" ? "text" : "crosshair" }}
-      />
+      <div className="relative w-full h-full">
+        {/* Remote cursors */}
+        <div className="absolute inset-0 pointer-events-none z-40">
+          {Object.entries(remoteCursors).map(([id, pos]) => (
+            <div
+              key={id}
+              style={{
+                position: "absolute",
+                left: pos.x,
+                top: pos.y,
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <div
+                className="w-3 h-3 rounded-full border-2 border-white shadow-md"
+                style={{
+                  backgroundColor: getColorFromSocketId(id),
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Canvas */}
+        <canvas
+          ref={canvasRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={stopDrawing}
+          className="block w-full h-full touch-none absolute inset-0 z-0"
+          style={{ cursor: tool === "text" ? "text" : "crosshair" }}
+        />
+      </div>
 
       {/* Text Input Overlay */}
       {textState.isTyping && (

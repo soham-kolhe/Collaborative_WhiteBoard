@@ -7,6 +7,8 @@ import {
   Download,
   Type,
   MoveUpRight,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 
 const Toolbar = ({
@@ -78,6 +80,9 @@ const Toolbar = ({
           className="w-24 accent-black h-1.5 bg-gray-200 rounded-lg cursor-pointer"
         />
       </div>
+{/* 
+      <IconButton icon={<Undo2 size={18} />} onClick={onUndo} />
+      <IconButton icon={<Redo2 size={18} />} onClick={onRedo} /> */}
 
       <div className="h-6 w-[1px] bg-gray-300 mx-2" />
 
