@@ -23,7 +23,7 @@ export default function BoardRoom({ user }: BoardRoomProps) {
   const [usersInRoom, setUsersInRoom] = useState<RoomUser[]>([]);
   const [canDraw, setCanDraw] = useState(true);
   const [myRole, setMyRole] = useState<'Admin' | 'User'>('User');
-  const [copyLabel, setCopyLabel] = useState('Copy Invite Link');
+  const [copyLabel, setCopyLabel] = useState('Copy Room ID');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const sock = getSocket(user.token);
 
@@ -57,10 +57,12 @@ export default function BoardRoom({ user }: BoardRoomProps) {
   }, [boardId, user.userName, sock]);
 
   const handleCopyLink = useCallback(() => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopyLabel('Copied!');
-    setTimeout(() => setCopyLabel('Copy Invite Link'), 2000);
-  }, []);
+    if (boardId) {
+      navigator.clipboard.writeText(boardId);
+    }
+    setCopyLabel('Copied ID!');
+    setTimeout(() => setCopyLabel('Copy Room ID'), 2000);
+  }, [boardId]);
 
   const handleTogglePermission = useCallback((targetSocketId: string) => {
     sock.emit('toggle-permission', { targetSocketId, roomId: boardId });
@@ -86,7 +88,7 @@ export default function BoardRoom({ user }: BoardRoomProps) {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
             </svg>
-            Boards
+            Leave
           </button>
           <div className="w-px h-4 bg-slate-300" />
           <div className="flex items-center gap-2">
